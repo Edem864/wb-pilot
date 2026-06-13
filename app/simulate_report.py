@@ -41,10 +41,7 @@ for item in goods:
     )
 
     result = simulate(sku, current_price)
-    min_price = find_min_price(sku)
-    target_price = find_target_price(sku)
-
- new_price = propose_price(sku, current_price)
+    new_price = propose_price(sku, current_price)
 
     if new_price > current_price:
         rec = f"ПОВЫСИТЬ до {new_price:.0f}р"
