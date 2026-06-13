@@ -1,9 +1,20 @@
-import json
-from pricing_engine import SKU, simulate, find_min_price, find_target_price, propose_price
+import psycopg2
+import psycopg2.extras
+from pricing_engine import SKU, simulate, propose_price
 from wb_api import get_prices
 
-with open("skus_example.json", "r", encoding="utf-8") as f:
-    financial_data = json.load(f)
+conn = psycopg2.connect(
+    host="localhost",
+    dbname="wbpilot",
+    user="wbpilot_user",
+    password="wbpilot_pass_2026",
+)
+cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+cur.execute("SELECT * FROM skus")
+rows = cur.fetchall()
+financial_data = {str(row["nm_id"]): row for row in rows}
+cur.close()
+conn.close()
 
 status, data = get_prices(limit=100)
 if status != 200:
@@ -25,19 +36,19 @@ for item in goods:
 
     sku = SKU(
         name=fin["name"],
-        cost=fin["cost"],
-        packaging=fin["packaging"],
-        logistics_forward=fin["logistics_forward"],
-        logistics_backward=fin["logistics_backward"],
-        buyout_rate=fin["buyout_rate"],
-        commission=fin["commission"],
+        cost=float(fin["cost"]),
+        packaging=float(fin["packaging"]),
+        logistics_forward=float(fin["logistics_forward"]),
+        logistics_backward=float(fin["logistics_backward"]),
+        buyout_rate=float(fin["buyout_rate"]),
+        commission=float(fin["commission"]),
         spp=0,
-        acquiring=fin["acquiring"],
-        tax_rate=fin["tax_rate"],
-        opex_rate=fin["opex_rate"],
-        min_margin=fin["min_margin"],
-        min_profit=fin["min_profit"],
-        target_profit=fin["target_profit"],
+        acquiring=float(fin["acquiring"]),
+        tax_rate=float(fin["tax_rate"]),
+        opex_rate=float(fin["opex_rate"]),
+        min_margin=float(fin["min_margin"]),
+        min_profit=float(fin["min_profit"]),
+        target_profit=float(fin["target_profit"]),
     )
 
     result = simulate(sku, current_price)
