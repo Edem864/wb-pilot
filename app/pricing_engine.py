@@ -58,8 +58,20 @@ def find_price_for_profit(sku: SKU, profit_target: float) -> float:
     return (profit_target + fixed) / ((1 - sku.spp) * k)
 
 
+def find_price_for_margin(sku: SKU, margin_target: float) -> float:
+    k = _k_factor(sku)
+    fixed = _fixed_costs(sku)
+    denom = (k - margin_target) * (1 - sku.spp)
+    if denom <= 0:
+        raise ValueError("Недостижимая маржа при данных параметрах")
+    return fixed / denom
+
+
 def find_min_price(sku: SKU) -> float:
-    return find_price_for_profit(sku, sku.min_profit)
+    """Минимальная допустимая цена с учётом и min_profit, и min_margin."""
+    by_profit = find_price_for_profit(sku, sku.min_profit)
+    by_margin = find_price_for_margin(sku, sku.min_margin)
+    return max(by_profit, by_margin)
 
 
 def find_target_price(sku: SKU) -> float:
