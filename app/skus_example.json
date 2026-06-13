@@ -1,0 +1,32 @@
+{
+  "851571893": {
+    "name": "Товар А",
+    "cost": 300,
+    "packaging": 10,
+    "logistics_forward": 40,
+    "logistics_backward": 30,
+    "buyout_rate": 0.65,
+    "commission": 0.17,
+    "acquiring": 0.015,
+    "tax_rate": 0.06,
+    "opex_rate": 0.05,
+    "min_margin": 0.15,
+    "min_profit": 30,
+    "target_profit": 80
+  },
+  "856625351": {
+    "name": "Товар Б",
+    "cost": 700,
+    "packaging": 15,
+    "logistics_forward": 50,
+    "logistics_backward": 35,
+    "buyout_rate": 0.7,
+    "commission": 0.17,
+    "acquiring": 0.015,
+    "tax_rate": 0.06,
+    "opex_rate": 0.05,
+    "min_margin": 0.15,
+    "min_profit": 80,
+    "target_profit": 200
+  }
+}
