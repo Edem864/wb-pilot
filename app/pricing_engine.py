@@ -9,29 +9,26 @@ from dataclasses import dataclass
 @dataclass
 class SKU:
     name: str
-    cost: float                # себестоимость
-    packaging: float           # упаковка
-    logistics_forward: float   # прямая логистика (фикс. сумма)
-    logistics_backward: float  # обратная логистика (фикс. сумма)
-    buyout_rate: float         # процент выкупа (0.0 - 1.0)
-    commission: float          # комиссия WB (0.0 - 1.0)
-    spp: float                 # СПП (0.0 - 1.0)
-    acquiring: float            # эквайринг (0.0 - 1.0)
-    tax_rate: float              # налог (0.0 - 1.0)
-    opex_rate: float             # операционные расходы (0.0 - 1.0)
-    min_margin: float            # минимальная маржа (0.0 - 1.0)
-    min_profit: float            # минимальная прибыль, руб
-    target_profit: float         # целевая прибыль, руб
+    cost: float
+    packaging: float
+    logistics_forward: float
+    logistics_backward: float
+    buyout_rate: float
+    commission: float
+    spp: float
+    acquiring: float
+    tax_rate: float
+    opex_rate: float
+    min_margin: float
+    min_profit: float
+    target_profit: float
 
 
 def _k_factor(sku: SKU) -> float:
-    """Доля от 'цены со скидкой', которая остаётся после
-    комиссии, эквайринга, налога и опекс."""
     return (1 - sku.commission) * (1 - sku.acquiring) - sku.tax_rate - sku.opex_rate
 
 
 def _fixed_costs(sku: SKU) -> float:
-    """Фиксированные затраты на единицу товара."""
     return (
         sku.cost
         + sku.packaging
@@ -41,14 +38,12 @@ def _fixed_costs(sku: SKU) -> float:
 
 
 def calculate_profit(sku: SKU, price: float) -> float:
-    """Прибыль с одной продажи при заданной цене."""
     revenue = price * (1 - sku.spp)
     k = _k_factor(sku)
     return revenue * k - _fixed_costs(sku)
 
 
 def calculate_margin(sku: SKU, price: float) -> float:
-    """Маржа (доля прибыли от 'цены со скидкой')."""
     revenue = price * (1 - sku.spp)
     if revenue == 0:
         return 0.0
@@ -56,7 +51,6 @@ def calculate_margin(sku: SKU, price: float) -> float:
 
 
 def find_price_for_profit(sku: SKU, profit_target: float) -> float:
-    """Находит цену, при которой прибыль равна profit_target."""
     k = _k_factor(sku)
     fixed = _fixed_costs(sku)
     if k <= 0 or sku.spp >= 1:
@@ -65,17 +59,14 @@ def find_price_for_profit(sku: SKU, profit_target: float) -> float:
 
 
 def find_min_price(sku: SKU) -> float:
-    """Минимальная допустимая цена (по минимальной прибыли)."""
     return find_price_for_profit(sku, sku.min_profit)
 
 
 def find_target_price(sku: SKU) -> float:
-    """Цена, обеспечивающая целевую прибыль."""
     return find_price_for_profit(sku, sku.target_profit)
 
 
 def simulate(sku: SKU, price: float) -> dict:
-    """Полная симуляция по цене: возвращает все ключевые показатели."""
     profit = calculate_profit(sku, price)
     margin = calculate_margin(sku, price)
     revenue = price * (1 - sku.spp)
@@ -87,12 +78,9 @@ def simulate(sku: SKU, price: float) -> dict:
         "meets_min_profit": profit >= sku.min_profit,
         "meets_min_margin": margin >= sku.min_margin,
     }
-    def propose_price(sku: SKU, current_price: float, max_change: float = 0.05) -> float:
-    """
-    Предлагает новую цену с учётом:
-    - ограничения на изменение не более max_change за один цикл (по умолчанию 5%);
-    - никогда не уходит ниже минимальной цены (по min_profit).
-    """
+
+
+def propose_price(sku: SKU, current_price: float, max_change: float = 0.05) -> float:
     if calculate_profit(sku, current_price) < sku.min_profit or calculate_margin(sku, current_price) < sku.min_margin:
         desired = find_min_price(sku)
     else:
