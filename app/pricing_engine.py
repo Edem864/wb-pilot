@@ -87,3 +87,21 @@ def simulate(sku: SKU, price: float) -> dict:
         "meets_min_profit": profit >= sku.min_profit,
         "meets_min_margin": margin >= sku.min_margin,
     }
+    def propose_price(sku: SKU, current_price: float, max_change: float = 0.05) -> float:
+    """
+    Предлагает новую цену с учётом:
+    - ограничения на изменение не более max_change за один цикл (по умолчанию 5%);
+    - никогда не уходит ниже минимальной цены (по min_profit).
+    """
+    if calculate_profit(sku, current_price) < sku.min_profit or calculate_margin(sku, current_price) < sku.min_margin:
+        desired = find_min_price(sku)
+    else:
+        desired = find_target_price(sku)
+
+    max_price = current_price * (1 + max_change)
+    min_price_step = current_price * (1 - max_change)
+
+    proposed = max(min(desired, max_price), min_price_step)
+    proposed = max(proposed, find_min_price(sku))
+
+    return round(proposed, 2)
