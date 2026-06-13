@@ -1,5 +1,5 @@
 import json
-from pricing_engine import SKU, simulate, find_min_price, find_target_price
+from pricing_engine import SKU, simulate, find_min_price, find_target_price, propose_price
 from wb_api import get_prices
 
 with open("skus_example.json", "r", encoding="utf-8") as f:
@@ -12,7 +12,7 @@ if status != 200:
 
 goods = data["data"]["listGoods"]
 
-print(f"{'Артикул':<12}{'Название':<12}{'Цена':>8}{'Прибыль':>10}{'Маржа%':>8}{'МинЦена':>10}{'ЦельЦена':>10}  Рекомендация")
+print(f"{'Артикул':<12}{'Название':<12}{'Цена':>8}{'Прибыль':>10}{'Маржа%':>8}{'НовЦена':>10}  Рекомендация")
 print("-" * 90)
 
 for item in goods:
@@ -44,11 +44,13 @@ for item in goods:
     min_price = find_min_price(sku)
     target_price = find_target_price(sku)
 
-    if not result["meets_min_profit"]:
-        rec = f"ПОВЫСИТЬ минимум до {min_price:.0f}р (риск убытка)"
-    elif current_price < target_price * 0.95:
-        rec = f"Можно повысить до {target_price:.0f}р"
+ new_price = propose_price(sku, current_price)
+
+    if new_price > current_price:
+        rec = f"ПОВЫСИТЬ до {new_price:.0f}р"
+    elif new_price < current_price:
+        rec = f"СНИЗИТЬ до {new_price:.0f}р"
     else:
         rec = "Цена в норме"
 
-    print(f"{nm_id:<12}{fin['name']:<12}{current_price:>8}{result['profit']:>10}{result['margin_pct']:>8}{min_price:>10.0f}{target_price:>10.0f}  {rec}")
+    print(f"{nm_id:<12}{fin['name']:<12}{current_price:>8}{result['profit']:>10}{result['margin_pct']:>8}{new_price:>10.0f}  {rec}")
