@@ -10,6 +10,9 @@ DB_CONFIG = dict(host="localhost", dbname="wbpilot", user="wbpilot_user", passwo
 def get_conn():
     return psycopg2.connect(**DB_CONFIG)
 
+# Поля которые вводятся в процентах (будем делить на 100 при сохранении)
+PERCENT_FIELDS = {"buyout_rate", "commission", "acquiring", "tax_rate", "opex_rate", "min_margin"}
+
 BASE = """
 <!doctype html>
 <html>
@@ -43,9 +46,11 @@ tr:hover td { background: #fafafa; }
 .badge-ok { background: #dcfce7; color: #16a34a; }
 label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 4px; }
 .hint { font-size: 12px; color: #999; font-weight: 400; margin-bottom: 4px; display: block; }
-input[type=text] { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; }
-input[type=text]:focus { border-color: #7c6aff; box-shadow: 0 0 0 3px #7c6aff22; }
-input[readonly] { background: #f8f8f8; color: #888; }
+.input-wrap { position: relative; }
+.input-wrap input { width: 100%; padding: 10px 36px 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; }
+.input-wrap input:focus { border-color: #7c6aff; box-shadow: 0 0 0 3px #7c6aff22; }
+.input-wrap input[readonly] { background: #f8f8f8; color: #888; }
+.input-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #999; pointer-events: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .form-group { margin-bottom: 0; }
 </style>
@@ -104,10 +109,13 @@ TMPL_FORM = BASE.replace("{% block content %}{% endblock %}", """
 <div class="card">
 <form method="post">
 <div class="form-grid">
-{% for field, label, hint in fields %}
+{% for field, label, hint, unit in fields %}
 <div class="form-group">
 <label>{{ label }}<span class="hint">{{ hint }}</span></label>
+<div class="input-wrap">
 <input type="text" name="{{ field }}" value="{{ values.get(field, '') }}" required {% if field == 'nm_id' and values.get('nm_id') %}readonly{% endif %}>
+{% if unit %}<span class="input-unit">{{ unit }}</span>{% endif %}
+</div>
 </div>
 {% endfor %}
 </div>
@@ -144,21 +152,36 @@ TMPL_REPORT = BASE.replace("{% block content %}{% endblock %}", """
 """)
 
 FIELDS = [
-    ("nm_id", "Артикул (nmID)", "Номер артикула Wildberries"),
-    ("name", "Название товара", "Любое удобное название"),
-    ("cost", "Себестоимость", "В рублях — сколько стоит закупка/производство"),
-    ("packaging", "Упаковка", "В рублях — стоимость упаковки"),
-    ("logistics_forward", "Логистика прямая", "В рублях — доставка до покупателя"),
-    ("logistics_backward", "Логистика обратная", "В рублях — стоимость возврата"),
-    ("buyout_rate", "Процент выкупа", "Доля от 1, например 0.7 = 70%"),
-    ("commission", "Комиссия WB", "Доля от 1, например 0.17 = 17%"),
-    ("acquiring", "Эквайринг", "Доля от 1, например 0.015 = 1.5%"),
-    ("tax_rate", "Налог", "Доля от 1, например 0.06 = 6% (УСН)"),
-    ("opex_rate", "Операц. расходы", "Доля от 1, например 0.05 = 5%"),
-    ("min_margin", "Минимальная маржа", "Доля от 1, например 0.15 = 15%"),
-    ("min_profit", "Минимальная прибыль", "В рублях — меньше этой суммы не продавать"),
-    ("target_profit", "Целевая прибыль", "В рублях — желаемая прибыль с продажи"),
+    ("nm_id",           "Артикул (nmID)",        "Номер артикула Wildberries",                    ""),
+    ("name",            "Название товара",         "Любое удобное название",                        ""),
+    ("cost",            "Себестоимость",           "Сколько стоит закупка или производство",        "руб"),
+    ("packaging",       "Упаковка",               "Стоимость упаковки",                            "руб"),
+    ("logistics_forward",  "Логистика прямая",    "Доставка до покупателя",                        "руб"),
+    ("logistics_backward", "Логистика обратная",  "Стоимость возврата",                            "руб"),
+    ("buyout_rate",     "Процент выкупа",          "Например: 70 означает 70%",                     "%"),
+    ("commission",      "Комиссия WB",             "Например: 17 означает 17%",                     "%"),
+    ("acquiring",       "Эквайринг",              "Например: 1.5 означает 1.5%",                   "%"),
+    ("tax_rate",        "Налог",                   "Например: 6 означает 6% (УСН)",                 "%"),
+    ("opex_rate",       "Операц. расходы",         "Например: 5 означает 5%",                       "%"),
+    ("min_margin",      "Минимальная маржа",       "Например: 15 означает 15%",                     "%"),
+    ("min_profit",      "Минимальная прибыль",     "Меньше этой суммы не продавать",                "руб"),
+    ("target_profit",   "Целевая прибыль",         "Желаемая прибыль с одной продажи",              "руб"),
 ]
+
+
+def form_value_for_display(field, db_value):
+    """Конвертирует значение из БД для отображения в форме."""
+    if field in PERCENT_FIELDS:
+        return str(round(float(db_value) * 100, 2))
+    return str(db_value)
+
+
+def form_value_for_save(field, user_value):
+    """Конвертирует введённое пользователем значение для сохранения в БД."""
+    if field in PERCENT_FIELDS:
+        return str(float(user_value) / 100)
+    return user_value
+
 
 @app.route("/")
 def index():
@@ -169,10 +192,13 @@ def index():
     cur.close(); conn.close()
     return render_template_string(TMPL_LIST, skus=skus, page="товары")
 
-@app.route("/add", methods=["GET","POST"])
+
+@app.route("/add", methods=["GET", "POST"])
 def add():
     if request.method == "POST":
-        data = {f: request.form[f] for f, _, _ in FIELDS}
+        data = {}
+        for f, _, _, _ in FIELDS:
+            data[f] = form_value_for_save(f, request.form[f])
         conn = get_conn(); cur = conn.cursor()
         cur.execute("""
             INSERT INTO skus (nm_id,name,cost,packaging,logistics_forward,logistics_backward,
@@ -188,14 +214,17 @@ def add():
         """, data)
         conn.commit(); cur.close(); conn.close()
         return redirect("/")
+
     values = {}
     nm_id = request.args.get("nm_id")
     if nm_id:
         conn = get_conn(); cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT * FROM skus WHERE nm_id=%s",(nm_id,))
+        cur.execute("SELECT * FROM skus WHERE nm_id=%s", (nm_id,))
         row = cur.fetchone(); cur.close(); conn.close()
-        if row: values = {k: str(v) for k,v in dict(row).items()}
+        if row:
+            values = {f: form_value_for_display(f, v) for f, v in dict(row).items()}
     return render_template_string(TMPL_FORM, fields=FIELDS, values=values, edit=bool(nm_id), page="товары")
+
 
 @app.route("/sync")
 def sync():
@@ -223,6 +252,7 @@ def sync():
         conn.commit(); offset += 100; time.sleep(6)
     cur.close(); conn.close()
     return redirect("/")
+
 
 @app.route("/report")
 def report():
@@ -253,6 +283,7 @@ def report():
         rows.append(dict(nm_id=nm_id,name=fin["name"],price=price,profit=res["profit"],
             margin=res["margin_pct"],new_price=new_price,action=action,rec=rec))
     return render_template_string(TMPL_REPORT, rows=rows, page="отчёт")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
