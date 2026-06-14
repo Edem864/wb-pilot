@@ -10,7 +10,6 @@ DB_CONFIG = dict(host="localhost", dbname="wbpilot", user="wbpilot_user", passwo
 def get_conn():
     return psycopg2.connect(**DB_CONFIG)
 
-# Поля которые вводятся в процентах (будем делить на 100 при сохранении)
 PERCENT_FIELDS = {"buyout_rate", "commission", "acquiring", "tax_rate", "opex_rate", "min_margin"}
 
 BASE = """
@@ -44,15 +43,20 @@ tr:hover td { background: #fafafa; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .badge-zero { background: #fee2e2; color: #dc2626; }
 .badge-ok { background: #dcfce7; color: #16a34a; }
-label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 4px; }
-.hint { font-size: 12px; color: #999; font-weight: 400; margin-bottom: 4px; display: block; }
+.badge-warn { background: #fef9c3; color: #b45309; }
+label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 2px; }
+.hint { font-size: 12px; color: #999; font-weight: 400; margin-bottom: 6px; display: block; }
+.hint-warn { font-size: 12px; color: #b45309; font-weight: 600; margin-bottom: 6px; display: block; }
 .input-wrap { position: relative; }
-.input-wrap input { width: 100%; padding: 10px 36px 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; }
+.input-wrap input { width: 100%; padding: 10px 48px 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; }
 .input-wrap input:focus { border-color: #7c6aff; box-shadow: 0 0 0 3px #7c6aff22; }
 .input-wrap input[readonly] { background: #f8f8f8; color: #888; }
+.input-wrap input.warn-field { border-color: #f59e0b; }
+.input-wrap input.warn-field:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px #f59e0b22; }
 .input-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #999; pointer-events: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .form-group { margin-bottom: 0; }
+.section-title { font-size: 13px; font-weight: 700; color: #7c6aff; text-transform: uppercase; letter-spacing: 0.05em; margin: 24px 0 16px; grid-column: 1 / -1; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -80,9 +84,9 @@ TMPL_LIST = BASE.replace("{% block content %}{% endblock %}", """
 <th>Артикул</th>
 <th>Название</th>
 <th>Себестоимость, руб</th>
-<th>Мин. маржа, %</th>
+<th>Целевая прибыль, руб</th>
+<th>Предохранитель, %</th>
 <th>Мин. прибыль, руб</th>
-<th>Цель прибыль, руб</th>
 <th>Статус</th>
 <th></th>
 </tr></thead>
@@ -92,9 +96,9 @@ TMPL_LIST = BASE.replace("{% block content %}{% endblock %}", """
 <td>{{ s.nm_id }}</td>
 <td>{{ s.name }}</td>
 <td>{{ s.cost }} руб</td>
+<td>{{ s.target_profit }} руб</td>
 <td>{{ (s.min_margin * 100)|int }} %</td>
 <td>{{ s.min_profit }} руб</td>
-<td>{{ s.target_profit }} руб</td>
 <td>{% if s.cost == 0 %}<span class="badge badge-zero">Нет данных</span>{% else %}<span class="badge badge-ok">Заполнен</span>{% endif %}</td>
 <td><a href="/add?nm_id={{ s.nm_id }}" class="btn btn-sm btn-primary">Редактировать</a></td>
 </tr>
@@ -109,15 +113,139 @@ TMPL_FORM = BASE.replace("{% block content %}{% endblock %}", """
 <div class="card">
 <form method="post">
 <div class="form-grid">
-{% for field, label, hint, unit in fields %}
+
+<div class="section-title">Основные данные</div>
+
 <div class="form-group">
-<label>{{ label }}<span class="hint">{{ hint }}</span></label>
+<label>Артикул (nmID)</label>
+<span class="hint">Номер артикула Wildberries</span>
 <div class="input-wrap">
-<input type="text" name="{{ field }}" value="{{ values.get(field, '') }}" required {% if field == 'nm_id' and values.get('nm_id') %}readonly{% endif %}>
-{% if unit %}<span class="input-unit">{{ unit }}</span>{% endif %}
+<input type="text" name="nm_id" value="{{ values.get('nm_id', '') }}" required {% if values.get('nm_id') %}readonly{% endif %}>
 </div>
 </div>
-{% endfor %}
+
+<div class="form-group">
+<label>Название товара</label>
+<span class="hint">Любое удобное название для вас</span>
+<div class="input-wrap">
+<input type="text" name="name" value="{{ values.get('name', '') }}" required>
+</div>
+</div>
+
+<div class="section-title">Расходы на товар</div>
+
+<div class="form-group">
+<label>Себестоимость</label>
+<span class="hint">Закупка или производство единицы товара</span>
+<div class="input-wrap">
+<input type="text" name="cost" value="{{ values.get('cost', '') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Упаковка</label>
+<span class="hint">Стоимость упаковки единицы товара</span>
+<div class="input-wrap">
+<input type="text" name="packaging" value="{{ values.get('packaging', '0') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Логистика прямая</label>
+<span class="hint">Доставка товара до покупателя</span>
+<div class="input-wrap">
+<input type="text" name="logistics_forward" value="{{ values.get('logistics_forward', '0') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Логистика обратная</label>
+<span class="hint">Стоимость возврата товара</span>
+<div class="input-wrap">
+<input type="text" name="logistics_backward" value="{{ values.get('logistics_backward', '0') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="section-title">Комиссии и налоги</div>
+
+<div class="form-group">
+<label>Процент выкупа</label>
+<span class="hint">Какой % покупателей не возвращают товар</span>
+<div class="input-wrap">
+<input type="text" name="buyout_rate" value="{{ values.get('buyout_rate', '70') }}" required>
+<span class="input-unit">%</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Комиссия WB</label>
+<span class="hint">Комиссия Wildberries за продажу</span>
+<div class="input-wrap">
+<input type="text" name="commission" value="{{ values.get('commission', '17') }}" required>
+<span class="input-unit">%</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Эквайринг</label>
+<span class="hint">Комиссия за обработку платежа</span>
+<div class="input-wrap">
+<input type="text" name="acquiring" value="{{ values.get('acquiring', '1.5') }}" required>
+<span class="input-unit">%</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Налог</label>
+<span class="hint">Ваша налоговая ставка (УСН 6% = вводить 6)</span>
+<div class="input-wrap">
+<input type="text" name="tax_rate" value="{{ values.get('tax_rate', '6') }}" required>
+<span class="input-unit">%</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Операционные расходы</label>
+<span class="hint">Склад, реклама, зарплата — доля от цены</span>
+<div class="input-wrap">
+<input type="text" name="opex_rate" value="{{ values.get('opex_rate', '5') }}" required>
+<span class="input-unit">%</span>
+</div>
+</div>
+
+<div class="section-title">Цели по прибыли</div>
+
+<div class="form-group">
+<label>Целевая прибыль</label>
+<span class="hint">Желаемая прибыль с одной продажи — главная цель</span>
+<div class="input-wrap">
+<input type="text" name="target_profit" value="{{ values.get('target_profit', '0') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="form-group">
+<label>Минимальная прибыль</label>
+<span class="hint">Ниже этой суммы — не продавать</span>
+<div class="input-wrap">
+<input type="text" name="min_profit" value="{{ values.get('min_profit', '0') }}" required>
+<span class="input-unit">руб</span>
+</div>
+</div>
+
+<div class="form-group" style="grid-column: 1 / -1;">
+<label>Предохранитель от продажи в минус</label>
+<span class="hint-warn">⚠️ Минимальная маржа в % — защита от убытка. Если прибыль упадёт ниже этого уровня, система не допустит снижения цены. Рекомендуем 5-10% как страховку.</span>
+<div class="input-wrap">
+<input type="text" name="min_margin" value="{{ values.get('min_margin', '5') }}" required class="warn-field">
+<span class="input-unit">%</span>
+</div>
+</div>
+
 </div>
 <div style="margin-top: 24px; display: flex; gap: 12px;">
 <button type="submit" class="btn btn-primary">Сохранить</button>
@@ -129,6 +257,11 @@ TMPL_FORM = BASE.replace("{% block content %}{% endblock %}", """
 
 TMPL_REPORT = BASE.replace("{% block content %}{% endblock %}", """
 <div class="page-title">Отчёт по ценам</div>
+{% if not rows %}
+<div class="card">
+<p style="color:#888;">Нет товаров с заполненными данными. Перейдите в раздел <a href="/">Товары</a> и заполните себестоимость и параметры для каждого товара.</p>
+</div>
+{% else %}
 <div class="card">
 <table>
 <thead><tr>
@@ -149,38 +282,26 @@ TMPL_REPORT = BASE.replace("{% block content %}{% endblock %}", """
 </tbody>
 </table>
 </div>
+{% endif %}
 """)
-
-FIELDS = [
-    ("nm_id",           "Артикул (nmID)",        "Номер артикула Wildberries",                    ""),
-    ("name",            "Название товара",         "Любое удобное название",                        ""),
-    ("cost",            "Себестоимость",           "Сколько стоит закупка или производство",        "руб"),
-    ("packaging",       "Упаковка",               "Стоимость упаковки",                            "руб"),
-    ("logistics_forward",  "Логистика прямая",    "Доставка до покупателя",                        "руб"),
-    ("logistics_backward", "Логистика обратная",  "Стоимость возврата",                            "руб"),
-    ("buyout_rate",     "Процент выкупа",          "Например: 70 означает 70%",                     "%"),
-    ("commission",      "Комиссия WB",             "Например: 17 означает 17%",                     "%"),
-    ("acquiring",       "Эквайринг",              "Например: 1.5 означает 1.5%",                   "%"),
-    ("tax_rate",        "Налог",                   "Например: 6 означает 6% (УСН)",                 "%"),
-    ("opex_rate",       "Операц. расходы",         "Например: 5 означает 5%",                       "%"),
-    ("min_margin",      "Минимальная маржа",       "Например: 15 означает 15%",                     "%"),
-    ("min_profit",      "Минимальная прибыль",     "Меньше этой суммы не продавать",                "руб"),
-    ("target_profit",   "Целевая прибыль",         "Желаемая прибыль с одной продажи",              "руб"),
-]
 
 
 def form_value_for_display(field, db_value):
-    """Конвертирует значение из БД для отображения в форме."""
     if field in PERCENT_FIELDS:
         return str(round(float(db_value) * 100, 2))
     return str(db_value)
 
 
 def form_value_for_save(field, user_value):
-    """Конвертирует введённое пользователем значение для сохранения в БД."""
+    user_value = user_value.replace(",", ".")
     if field in PERCENT_FIELDS:
         return str(float(user_value) / 100)
     return user_value
+
+
+ALL_FIELDS = ["nm_id", "name", "cost", "packaging", "logistics_forward", "logistics_backward",
+              "buyout_rate", "commission", "acquiring", "tax_rate", "opex_rate",
+              "min_margin", "min_profit", "target_profit"]
 
 
 @app.route("/")
@@ -196,9 +317,7 @@ def index():
 @app.route("/add", methods=["GET", "POST"])
 def add():
     if request.method == "POST":
-        data = {}
-        for f, _, _, _ in FIELDS:
-            data[f] = form_value_for_save(f, request.form[f])
+        data = {f: form_value_for_save(f, request.form[f]) for f in ALL_FIELDS}
         conn = get_conn(); cur = conn.cursor()
         cur.execute("""
             INSERT INTO skus (nm_id,name,cost,packaging,logistics_forward,logistics_backward,
@@ -223,7 +342,7 @@ def add():
         row = cur.fetchone(); cur.close(); conn.close()
         if row:
             values = {f: form_value_for_display(f, v) for f, v in dict(row).items()}
-    return render_template_string(TMPL_FORM, fields=FIELDS, values=values, edit=bool(nm_id), page="товары")
+    return render_template_string(TMPL_FORM, values=values, edit=bool(nm_id), page="товары")
 
 
 @app.route("/sync")
@@ -246,7 +365,7 @@ def sync():
             cur.execute("""
                 INSERT INTO skus (nm_id,name,cost,packaging,logistics_forward,logistics_backward,
                     buyout_rate,commission,acquiring,tax_rate,opex_rate,min_margin,min_profit,target_profit)
-                VALUES (%s,%s,0,0,0,0,0,0.17,0.015,0.06,0.05,0.15,0,0)
+                VALUES (%s,%s,0,0,0,0,0,0.17,0.015,0.06,0.05,0.05,0,0)
             """, (nm_id_val, name))
             existing.add(nm_id_val)
         conn.commit(); offset += 100; time.sleep(6)
@@ -271,17 +390,17 @@ def report():
         nm_id = str(fin["nm_id"])
         if nm_id not in goods: continue
         price = goods[nm_id]["sizes"][0]["discountedPrice"]
-        sku = SKU(name=fin["name"],cost=float(fin["cost"]),packaging=float(fin["packaging"]),
-            logistics_forward=float(fin["logistics_forward"]),logistics_backward=float(fin["logistics_backward"]),
-            buyout_rate=float(fin["buyout_rate"]),commission=float(fin["commission"]),spp=0,
-            acquiring=float(fin["acquiring"]),tax_rate=float(fin["tax_rate"]),opex_rate=float(fin["opex_rate"]),
-            min_margin=float(fin["min_margin"]),min_profit=float(fin["min_profit"]),target_profit=float(fin["target_profit"]))
+        sku = SKU(name=fin["name"], cost=float(fin["cost"]), packaging=float(fin["packaging"]),
+            logistics_forward=float(fin["logistics_forward"]), logistics_backward=float(fin["logistics_backward"]),
+            buyout_rate=float(fin["buyout_rate"]), commission=float(fin["commission"]), spp=0,
+            acquiring=float(fin["acquiring"]), tax_rate=float(fin["tax_rate"]), opex_rate=float(fin["opex_rate"]),
+            min_margin=float(fin["min_margin"]), min_profit=float(fin["min_profit"]), target_profit=float(fin["target_profit"]))
         res = simulate(sku, price)
         new_price = propose_price(sku, price)
         action = "up" if new_price > price else ("down" if new_price < price else "ok")
-        rec = f"Повысить до {new_price:.0f}р" if action=="up" else (f"Снизить до {new_price:.0f}р" if action=="down" else "В норме")
-        rows.append(dict(nm_id=nm_id,name=fin["name"],price=price,profit=res["profit"],
-            margin=res["margin_pct"],new_price=new_price,action=action,rec=rec))
+        rec = f"Повысить до {new_price:.0f}р" if action == "up" else (f"Снизить до {new_price:.0f}р" if action == "down" else "В норме")
+        rows.append(dict(nm_id=nm_id, name=fin["name"], price=price, profit=res["profit"],
+            margin=res["margin_pct"], new_price=new_price, action=action, rec=rec))
     return render_template_string(TMPL_REPORT, rows=rows, page="отчёт")
 
 
