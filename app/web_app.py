@@ -381,26 +381,40 @@ def report():
     rows_db = cur.fetchall(); cur.close(); conn.close()
     if not rows_db:
         return render_template_string(TMPL_REPORT, rows=[], page="отчёт")
-    status, data = get_prices(limit=100)
-    if status != 200:
-        return render_template_string(TMPL_REPORT, rows=[], page="отчёт")
-    goods = {str(g["nmID"]): g for g in data["data"]["listGoods"]}
+
+    needed_ids = {str(r["nm_id"]) for r in rows_db}
+    goods = {}
+    offset = 0
+    while len(goods) < len(needed_ids):
+        status, data = get_prices(limit=100, offset=offset)
+        if status == 429:
+            time.sleep(6); continue
+        if status != 200: break
+        batch = data.get("data", {}).get("listGoods", [])
+        if not batch: break
+        for g in batch:
+            if str(g["nmID"]) in needed_ids:
+                goods[str(g["nmID"])] = g
+        offset += 100
+        if offset > 2000: break
+        time.sleep(2)
+
     rows = []
     for fin in rows_db:
         nm_id = str(fin["nm_id"])
         if nm_id not in goods: continue
         price = goods[nm_id]["sizes"][0]["discountedPrice"]
-        sku = SKU(name=fin["name"], cost=float(fin["cost"]), packaging=float(fin["packaging"]),
-            logistics_forward=float(fin["logistics_forward"]), logistics_backward=float(fin["logistics_backward"]),
-            buyout_rate=float(fin["buyout_rate"]), commission=float(fin["commission"]), spp=0,
-            acquiring=float(fin["acquiring"]), tax_rate=float(fin["tax_rate"]), opex_rate=float(fin["opex_rate"]),
-            min_margin=float(fin["min_margin"]), min_profit=float(fin["min_profit"]), target_profit=float(fin["target_profit"]))
+        sku = SKU(name=fin["name"],cost=float(fin["cost"]),packaging=float(fin["packaging"]),
+            logistics_forward=float(fin["logistics_forward"]),logistics_backward=float(fin["logistics_backward"]),
+            buyout_rate=float(fin["buyout_rate"]),commission=float(fin["commission"]),spp=0,
+            acquiring=float(fin["acquiring"]),tax_rate=float(fin["tax_rate"]),opex_rate=float(fin["opex_rate"]),
+            min_margin=float(fin["min_margin"]),min_profit=float(fin["min_profit"]),target_profit=float(fin["target_profit"]))
         res = simulate(sku, price)
         new_price = propose_price(sku, price)
         action = "up" if new_price > price else ("down" if new_price < price else "ok")
-        rec = f"Повысить до {new_price:.0f}р" if action == "up" else (f"Снизить до {new_price:.0f}р" if action == "down" else "В норме")
-        rows.append(dict(nm_id=nm_id, name=fin["name"], price=price, profit=res["profit"],
-            margin=res["margin_pct"], new_price=new_price, action=action, rec=rec))
+        rec = f"Повысить до {new_price:.0f}р" if action=="up" else (f"Снизить до {new_price:.0f}р" if action=="down" else "В норме")
+        rows.append(dict(nm_id=nm_id,name=fin["name"],price=price,profit=res["profit"],
+            margin=res["margin_pct"],new_price=new_price,action=action,rec=rec))
     return render_template_string(TMPL_REPORT, rows=rows, page="отчёт")
 
 
