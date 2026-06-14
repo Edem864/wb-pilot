@@ -35,19 +35,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .btn-bar { display: flex; gap: 12px; margin-bottom: 24px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 thead tr { background: #f8f8ff; }
-th { text-align: left; padding: 12px 16px; color: #666; font-weight: 600; border-bottom: 2px solid #e5e7eb; }
+th { text-align: left; padding: 12px 16px; color: #666; font-weight: 600; border-bottom: 2px solid #e5e7eb; font-size: 13px; }
 td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #333; }
 tr:hover td { background: #fafafa; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .badge-zero { background: #fee2e2; color: #dc2626; }
 .badge-ok { background: #dcfce7; color: #16a34a; }
 label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 4px; }
+.hint { font-size: 12px; color: #999; font-weight: 400; margin-bottom: 4px; display: block; }
 input[type=text] { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; }
 input[type=text]:focus { border-color: #7c6aff; box-shadow: 0 0 0 3px #7c6aff22; }
 input[readonly] { background: #f8f8f8; color: #888; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .form-group { margin-bottom: 0; }
-.sync-msg { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #92400e; }
 </style>
 </head>
 <body>
@@ -72,17 +72,24 @@ TMPL_LIST = BASE.replace("{% block content %}{% endblock %}", """
 <div class="card">
 <table>
 <thead><tr>
-<th>Артикул</th><th>Название</th><th>Себестоимость</th><th>Мин.маржа</th><th>Мин.прибыль</th><th>Цель прибыль</th><th>Статус</th><th></th>
+<th>Артикул</th>
+<th>Название</th>
+<th>Себестоимость, руб</th>
+<th>Мин. маржа, %</th>
+<th>Мин. прибыль, руб</th>
+<th>Цель прибыль, руб</th>
+<th>Статус</th>
+<th></th>
 </tr></thead>
 <tbody>
 {% for s in skus %}
 <tr>
 <td>{{ s.nm_id }}</td>
 <td>{{ s.name }}</td>
-<td>{{ s.cost }}</td>
-<td>{{ s.min_margin }}</td>
-<td>{{ s.min_profit }}</td>
-<td>{{ s.target_profit }}</td>
+<td>{{ s.cost }} руб</td>
+<td>{{ (s.min_margin * 100)|int }} %</td>
+<td>{{ s.min_profit }} руб</td>
+<td>{{ s.target_profit }} руб</td>
 <td>{% if s.cost == 0 %}<span class="badge badge-zero">Нет данных</span>{% else %}<span class="badge badge-ok">Заполнен</span>{% endif %}</td>
 <td><a href="/add?nm_id={{ s.nm_id }}" class="btn btn-sm btn-primary">Редактировать</a></td>
 </tr>
@@ -97,9 +104,9 @@ TMPL_FORM = BASE.replace("{% block content %}{% endblock %}", """
 <div class="card">
 <form method="post">
 <div class="form-grid">
-{% for field, label in fields %}
+{% for field, label, hint in fields %}
 <div class="form-group">
-<label>{{ label }}</label>
+<label>{{ label }}<span class="hint">{{ hint }}</span></label>
 <input type="text" name="{{ field }}" value="{{ values.get(field, '') }}" required {% if field == 'nm_id' and values.get('nm_id') %}readonly{% endif %}>
 </div>
 {% endfor %}
@@ -117,17 +124,17 @@ TMPL_REPORT = BASE.replace("{% block content %}{% endblock %}", """
 <div class="card">
 <table>
 <thead><tr>
-<th>Артикул</th><th>Название</th><th>Текущая цена</th><th>Прибыль</th><th>Маржа %</th><th>Новая цена</th><th>Рекомендация</th>
+<th>Артикул</th><th>Название</th><th>Текущая цена, руб</th><th>Прибыль, руб</th><th>Маржа, %</th><th>Новая цена, руб</th><th>Рекомендация</th>
 </tr></thead>
 <tbody>
 {% for r in rows %}
 <tr>
 <td>{{ r.nm_id }}</td>
 <td>{{ r.name }}</td>
-<td>{{ r.price }}</td>
-<td>{{ r.profit }}</td>
-<td>{{ r.margin }}</td>
-<td><b>{{ r.new_price }}</b></td>
+<td>{{ r.price }} руб</td>
+<td>{{ r.profit }} руб</td>
+<td>{{ r.margin }} %</td>
+<td><b>{{ r.new_price }} руб</b></td>
 <td><span class="badge {% if r.action == 'up' %}badge-ok{% elif r.action == 'down' %}badge-zero{% else %}badge-ok{% endif %}">{{ r.rec }}</span></td>
 </tr>
 {% endfor %}
@@ -137,20 +144,20 @@ TMPL_REPORT = BASE.replace("{% block content %}{% endblock %}", """
 """)
 
 FIELDS = [
-    ("nm_id","Артикул (nmID)"),
-    ("name","Название товара"),
-    ("cost","Себестоимость, руб"),
-    ("packaging","Упаковка, руб"),
-    ("logistics_forward","Логистика прямая, руб"),
-    ("logistics_backward","Логистика обратная (возврат), руб"),
-    ("buyout_rate","Процент выкупа, доля от 1 (напр. 0.7 = 70%)"),
-    ("commission","Комиссия WB, доля от 1 (напр. 0.17 = 17%)"),
-    ("acquiring","Эквайринг, доля от 1 (напр. 0.015 = 1.5%)"),
-    ("tax_rate","Налог, доля от 1 (напр. 0.06 = 6%)"),
-    ("opex_rate","Операц. расходы, доля от 1 (напр. 0.05 = 5%)"),
-    ("min_margin","Минимальная маржа, доля от 1 (напр. 0.15 = 15%)"),
-    ("min_profit","Минимальная прибыль, руб"),
-    ("target_profit","Целевая прибыль, руб"),
+    ("nm_id", "Артикул (nmID)", "Номер артикула Wildberries"),
+    ("name", "Название товара", "Любое удобное название"),
+    ("cost", "Себестоимость", "В рублях — сколько стоит закупка/производство"),
+    ("packaging", "Упаковка", "В рублях — стоимость упаковки"),
+    ("logistics_forward", "Логистика прямая", "В рублях — доставка до покупателя"),
+    ("logistics_backward", "Логистика обратная", "В рублях — стоимость возврата"),
+    ("buyout_rate", "Процент выкупа", "Доля от 1, например 0.7 = 70%"),
+    ("commission", "Комиссия WB", "Доля от 1, например 0.17 = 17%"),
+    ("acquiring", "Эквайринг", "Доля от 1, например 0.015 = 1.5%"),
+    ("tax_rate", "Налог", "Доля от 1, например 0.06 = 6% (УСН)"),
+    ("opex_rate", "Операц. расходы", "Доля от 1, например 0.05 = 5%"),
+    ("min_margin", "Минимальная маржа", "Доля от 1, например 0.15 = 15%"),
+    ("min_profit", "Минимальная прибыль", "В рублях — меньше этой суммы не продавать"),
+    ("target_profit", "Целевая прибыль", "В рублях — желаемая прибыль с продажи"),
 ]
 
 @app.route("/")
@@ -165,7 +172,7 @@ def index():
 @app.route("/add", methods=["GET","POST"])
 def add():
     if request.method == "POST":
-        data = {f: request.form[f] for f, _ in FIELDS}
+        data = {f: request.form[f] for f, _, _ in FIELDS}
         conn = get_conn(); cur = conn.cursor()
         cur.execute("""
             INSERT INTO skus (nm_id,name,cost,packaging,logistics_forward,logistics_backward,
